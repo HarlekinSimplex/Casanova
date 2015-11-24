@@ -1,4 +1,6 @@
 ﻿:Namespace Casanova
+    ⍝ Define Environment 
+    ⎕ML←⎕IO←1
 
     ⍝ CSV Files to read input data from
     CSV_PATH            ← '/home/pi/Casanova/'
@@ -7,11 +9,6 @@
     HANDLING_TIMES_CSV  ← 'handlingTimes.csv'
     HUBS_CSV            ← 'Hubs.csv'
 
-    ⍝ Define index constants to access data elements
-    ⍝
-    ⍝ Flight Schedule
-    Legs                      ← ⍬   ⍝ Local variable to hold Legs
-    FlightSchedule            ← ⍬   ⍝ Local variable to hold FlightSchedule
     ⍝ Data Element indicies
     FS_ID                     ← 1   ⍝ numeric
     FS_ORIGIN                 ← 2   ⍝ string[3]
@@ -27,20 +24,14 @@
     FS_FIXED_COSTS            ← 12  ⍝ float
     FS_CAPACITY               ← 13  ⍝ numeric     n kg
     FS_REALIZATION            ← 14  ⍝ string[10]  'optional' or 'obligatory'
+
     ⍝ Index on leg element that need string to numeric conversion
     FS_NUMERIC_FIELD_INDEX    ← 1 4 5 6 7 8 11 12 13
+    HC_NUMERIC_FIELD_INDEX    ← 3 ⍝ Handling Costs
+    HT_NUMERIC_FIELD_INDEX    ← 3 ⍝ Handling Times
+
     ⍝ Index on leg elements that are to be indicated in the keymaped legs
-    FS_ROTATION_FIELD_INDEX   ← 1 2 3   ⍝ Indicate ID, ORIGIN and DESTINATION
-
-    HandlingCosts             ← ⍬   ⍝ Local variable to hold Handling Costs
-    HC_NUMERIC_FIELD_INDEX    ← 3
-
-    HandlingTimes             ← ⍬   ⍝ Local variable to hold Handling Times
-    HT_NUMERIC_FIELD_INDEX    ← 3
-
-    Hubs                      ← ⍬   ⍝ Local variable to hold Hub Data
-
-    Airports                  ← ⍬   ⍝ Arports with 1:Locations and 2:Hubs
+    FS_ROTATION_FIELD_INDEX   ← 1 2 3   ⍝ D, ORIGIN and DESTINATION
 
     ⍝ Define Cut utiliy
     ⍝ 
@@ -70,36 +61,61 @@
       r←↑';'Cut¨lines
     ∇
 
-    ⍝ Build flight rotations from leg element array
-    ⍝
-    ⍝ r: Array of rotataion flights with all its dentified legs attached
-    ∇ r←BuildFlightSchedule;elements;legs
-        ⍝ Load and parse SSIM file
-      legs←ReadCSVFile(CSV_PATH,FLIGHT_SCHEDULE_CSV)1
-     
-        ⍝ Convert certain string columns to numeric values
-      legs[;FS_NUMERIC_FIELD_INDEX]←⍎¨legs[;FS_NUMERIC_FIELD_INDEX]
-      Legs←legs
-     
-        ⍝ Keymap legs intto rotations by FlightID (like SELECT legs GROUP by FlightID)
-      r←legs[;FS_FLIGHT_ID]{⍺ ⍵}⌸↓legs[;FS_ROTATION_FIELD_INDEX]    ⍝ Legs are indicated as vector
-⍝        r←legs[;FS_FLIGHT_ID]{⍺ ⍵}⌸legs[;FS_ROTATION_FIELD_INDEX]     ⍝ Legs are indicated as table
+    :Class classScheduleData
+        :Field Public flightLegs     ←⍬
+        :Field Public flightSchedule ←⍬
+
+        ∇ make
+          :Implements Constructor
+          :Access Public
+         
+            ⍝ Read Leg CSV File (Remove Header) and convert numeric columns
+          flightLegs←##.ReadCSVFile(##.CSV_PATH,##.FLIGHT_SCHEDULE_CSV)1
+          flightLegs[;##.FS_NUMERIC_FIELD_INDEX]←⍎¨flightLegs[;##.FS_NUMERIC_FIELD_INDEX]
+            ⍝ Key selected leg data by FlightID
+          flightSchedule←flightLegs[;##.FS_FLIGHT_ID]{⍺ ⍵}⌸flightLegs[;##.FS_ROTATION_FIELD_INDEX]
+        ∇
+    :EndClass
+
+    :Class classAirportData
+        :Field Public airportLocations ←⍬
+        :Field Public hubLocations     ←⍬
+        :Field Public handlingCosts    ←⍬
+        :Field Public handlingTimes    ←⍬
+
+        ∇ make
+          :Implements Constructor
+          :Access Public
+         
+            ⍝ Key Airport Locations from the Leg Data
+          airportLocations←{⍺}⌸(##.ScheduleData.flightLegs[;2],##.ScheduleData.flightLegs[;3])
+            ⍝ Sort Airport Locations ascending
+          airportLocations←{⍵[⍋↑⍵]}airportLocations
+         
+            ⍝ Read Hub Locations CSV File (Remove Header)
+          hubLocations←##.ReadCSVFile(##.CSV_PATH,##.HUBS_CSV)1
+            ⍝ Sort Hub Locations ascending
+          hubLocations←{⍵[⍋↑⍵]}hubLocations[;1]
+         
+            ⍝ Read Handling Costs CSV File (Remove Header) and convert numeric columns
+          handlingCosts←##.ReadCSVFile(##.CSV_PATH,##.HANDLING_COSTS_CSV)1
+          handlingCosts[;##.HC_NUMERIC_FIELD_INDEX]←⍎¨handlingCosts[;##.HC_NUMERIC_FIELD_INDEX]
+            ⍝ Key Handling Costs by Airport Location
+          handlingCosts←handlingCosts[;1]{⍺ ⍵}⌸handlingCosts[;2 3]
+         
+            ⍝ Read Handling Times CSV File (Remove Header) and convert numeric columns
+          handlingTimes←##.ReadCSVFile(##.CSV_PATH,##.HANDLING_TIMES_CSV)1
+          handlingTimes[;##.HT_NUMERIC_FIELD_INDEX]←⍎¨handlingTimes[;##.HT_NUMERIC_FIELD_INDEX]
+            ⍝ Key Handling Times by Airport Location
+          handlingTimes←handlingTimes[;1]{⍺ ⍵}⌸handlingTimes[;2 3]
+        ∇
+    :EndClass
+
+    ∇ Init
+        ⍝ Instantiate and load Schedule Data container
+      ScheduleData←⎕NEW classScheduleData
+        ⍝ Instantiate and load Airport Data container
+      AirportData←⎕NEW classAirportData
     ∇
 
-    ∇ RunAll
-      Legs←ReadCSVFile(CSV_PATH,FLIGHT_SCHEDULE_CSV)1
-      Legs[;FS_NUMERIC_FIELD_INDEX]←⍎¨Legs[;FS_NUMERIC_FIELD_INDEX]
-     
-      FlightSchedule←Legs[;FS_FLIGHT_ID]{⍺ ⍵}⌸↓Legs[;FS_ROTATION_FIELD_INDEX]
-     
-      Hubs←ReadCSVFile(CSV_PATH,HUBS_CSV)1
-     
-      Airports←2 1⍴(⊂1⌷[2]{⍺,≢⍵}⌸(Legs[;2],Legs[;3]))(⊂1⌷[2]Hubs)
-     
-      HandlingCosts←ReadCSVFile(CSV_PATH,HANDLING_COSTS_CSV)1
-      HandlingCosts[;HC_NUMERIC_FIELD_INDEX]←⍎¨HandlingCosts[;HC_NUMERIC_FIELD_INDEX]
-     
-      HandlingTimes←ReadCSVFile(CSV_PATH,HANDLING_TIMES_CSV)1
-      HandlingTimes[;HT_NUMERIC_FIELD_INDEX]←⍎¨HandlingTimes[;HT_NUMERIC_FIELD_INDEX]
-    ∇
 :EndNamespace
