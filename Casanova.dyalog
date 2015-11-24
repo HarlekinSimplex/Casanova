@@ -40,6 +40,8 @@
 
     Hubs                      ← ⍬   ⍝ Local variable to hold Hub Data
 
+    Airports                  ← ⍬   ⍝ Arports with 1:Locations and 2:Hubs
+
     ⍝ Define Cut utiliy
     ⍝ 
     ⍝ f← ⍺ Cut ⍵
@@ -85,14 +87,19 @@
     ∇
 
     ∇ RunAll
-      FlightSchedule←BuildFlightSchedule
+      Legs←ReadCSVFile(CSV_PATH,FLIGHT_SCHEDULE_CSV)1
+      Legs[;FS_NUMERIC_FIELD_INDEX]←⍎¨Legs[;FS_NUMERIC_FIELD_INDEX]
+     
+      FlightSchedule←Legs[;FS_FLIGHT_ID]{⍺ ⍵}⌸↓Legs[;FS_ROTATION_FIELD_INDEX]
+     
+      Hubs←ReadCSVFile(CSV_PATH,HUBS_CSV)1
+     
+      Airports←2 1⍴(⊂1⌷[2]{⍺,≢⍵}⌸(Legs[;2],Legs[;3]))(⊂1⌷[2]Hubs)
      
       HandlingCosts←ReadCSVFile(CSV_PATH,HANDLING_COSTS_CSV)1
       HandlingCosts[;HC_NUMERIC_FIELD_INDEX]←⍎¨HandlingCosts[;HC_NUMERIC_FIELD_INDEX]
      
       HandlingTimes←ReadCSVFile(CSV_PATH,HANDLING_TIMES_CSV)1
       HandlingTimes[;HT_NUMERIC_FIELD_INDEX]←⍎¨HandlingTimes[;HT_NUMERIC_FIELD_INDEX]
-     
-      Hubs←ReadCSVFile(CSV_PATH,HUBS_CSV)1
     ∇
 :EndNamespace
